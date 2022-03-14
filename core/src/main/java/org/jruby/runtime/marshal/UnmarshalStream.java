@@ -34,15 +34,11 @@
 
 package org.jruby.runtime.marshal;
 
-import java.io.EOFException;
-import java.io.IOException;
-import java.io.InputStream;
 import org.jcodings.Encoding;
 import org.jcodings.EncodingDB.Entry;
 import org.jcodings.specific.ASCIIEncoding;
 import org.jcodings.specific.USASCIIEncoding;
 import org.jcodings.specific.UTF8Encoding;
-
 import org.jruby.Ruby;
 import org.jruby.RubyArray;
 import org.jruby.RubyBignum;
@@ -66,8 +62,13 @@ import org.jruby.runtime.encoding.EncodingCapable;
 import org.jruby.util.ByteList;
 import org.jruby.util.RegexpOptions;
 
+import java.io.EOFException;
+import java.io.IOException;
+import java.io.InputStream;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
  * Unmarshals objects from strings or streams in Ruby's marshal format.
@@ -81,6 +82,7 @@ public class UnmarshalStream extends InputStream {
     private final InputStream inputStream;
     private final boolean taint;
     private List<Integer> acceptedTypes;
+    private Set<String> acceptedClasses;
     private boolean rejectCalls;
 
     public UnmarshalStream(Ruby runtime, InputStream in, IRubyObject proc, boolean taint) throws IOException {
@@ -108,6 +110,7 @@ public class UnmarshalStream extends InputStream {
         }
 
         this.acceptedTypes = new ArrayList<>();
+        this.acceptedClasses = new HashSet<>();
         this.rejectCalls = false;
     }
 
@@ -116,7 +119,18 @@ public class UnmarshalStream extends InputStream {
                            boolean rejectCalls) throws IOException {
         this(runtime, in, proc, taint);
         this.rejectCalls = rejectCalls;
-        this.acceptedTypes = acceptedTypes;
+        if (acceptedTypes != null) {
+            this.acceptedTypes.addAll(acceptedTypes);
+        }
+    }
+
+    public UnmarshalStream(Ruby runtime, InputStream in, IRubyObject proc, boolean taint,
+            List<Integer> acceptedTypes, Set<String> acceptedClasses,
+            boolean rejectCalls) throws IOException {
+        this(runtime, in, proc, taint, acceptedTypes, rejectCalls);
+        if (acceptedClasses != null) {
+            this.acceptedClasses.addAll(acceptedClasses);
+        }
     }
 
     // r_object
@@ -534,24 +548,25 @@ public class UnmarshalStream extends InputStream {
         String className = unmarshalObject(false).asJavaString();
         ByteList marshaled = unmarshalString();
         RubyClass classInstance = findClass(className);
-        RubyString data = RubyString.newString(runtime, marshaled);
         IRubyObject unmarshaled;
+        RubyString data = RubyString.newString(runtime, marshaled);
 
         // Special case Encoding so they are singletons
         // See https://bugs.ruby-lang.org/issues/11760
-        if (classInstance == runtime.getEncoding()) {
-            unmarshaled = RubyEncoding.find(runtime.getCurrentContext(), classInstance, data);
-        } else {
-            if (state.isIvarWaiting()) {
-                defaultVariablesUnmarshal(data);
-                state.setIvarWaiting(false);
+        if (this.acceptedClasses.isEmpty() || this.acceptedClasses.contains(classInstance.getName())) {
+            if (classInstance == runtime.getEncoding()) {
+                unmarshaled = RubyEncoding.find(runtime.getCurrentContext(), classInstance, data);
+            } else {
+                if (state.isIvarWaiting()) {
+                    defaultVariablesUnmarshal(data);
+                    state.setIvarWaiting(false);
+                }
+                unmarshaled = classInstance.smartLoadOldUser(data);
             }
-            unmarshaled = classInstance.smartLoadOldUser(data);
+            registerLinkTarget(unmarshaled);
+            return unmarshaled;
         }
-
-        registerLinkTarget(unmarshaled);
-
-        return unmarshaled;
+        throw getRuntime().newArgumentError(String.join("Marshaled data is not allowed: ", className));
     }
 
     private IRubyObject userNewUnmarshal() throws IOException {
@@ -560,7 +575,10 @@ public class UnmarshalStream extends InputStream {
         IRubyObject result = classInstance.allocate();
         registerLinkTarget(result);
         IRubyObject marshaled = unmarshalObject();
-        return classInstance.smartLoadNewUser(result, marshaled);
+        if (this.acceptedClasses.isEmpty() || this.acceptedClasses.contains(classInstance.getName())) {
+            return classInstance.smartLoadNewUser(result, marshaled);
+        }
+        throw getRuntime().newArgumentError(String.join("Marshaled data is not allowed: ", className));
     }
 
     private RubyClass findClass(String className) {
