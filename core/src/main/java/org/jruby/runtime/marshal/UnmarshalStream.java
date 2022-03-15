@@ -566,7 +566,7 @@ public class UnmarshalStream extends InputStream {
             registerLinkTarget(unmarshaled);
             return unmarshaled;
         }
-        throw getRuntime().newArgumentError(String.join("Marshaled data is not allowed: ", className));
+        throw getRuntime().newArgumentError("Marshaled data is not allowed: " + className);
     }
 
     private IRubyObject userNewUnmarshal() throws IOException {
@@ -578,7 +578,7 @@ public class UnmarshalStream extends InputStream {
         if (this.acceptedClasses.isEmpty() || this.acceptedClasses.contains(classInstance.getName())) {
             return classInstance.smartLoadNewUser(result, marshaled);
         }
-        throw getRuntime().newArgumentError(String.join("Marshaled data is not allowed: ", className));
+        throw getRuntime().newArgumentError("Marshaled data is not allowed: " + className);
     }
 
     private RubyClass findClass(String className) {
