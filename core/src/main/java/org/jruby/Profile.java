@@ -38,6 +38,8 @@ public interface Profile {
             public boolean allowModule(String name) { return true; }
             public boolean allowLoad(String name) { return true; }
             public boolean allowRequire(String name) { return true; }
+            public boolean allowUnmarshalClass(String name) { return true; }
+            public boolean allowUnmarshalType(int type){ return true; }
         };
     Profile DEBUG_ALLOW = new Profile() {
             public boolean allowBuiltin(String name) { System.err.println("allowBuiltin("+name+")"); return true; }
@@ -45,6 +47,8 @@ public interface Profile {
             public boolean allowModule(String name) { System.err.println("allowModule("+name+")"); return true; }
             public boolean allowLoad(String name) { System.err.println("allowLoad("+name+")"); return true; }
             public boolean allowRequire(String name) { System.err.println("allowRequire("+name+")"); return true; }
+            public boolean allowUnmarshalClass(String name) { System.err.println("allowInputClass("+name+")"); return true; }
+            public boolean allowUnmarshalType(int type){ System.err.println("allowInputType("+type+")"); return true; }
         };
     Profile NO_FILE_CLASS = new Profile() {
             public boolean allowBuiltin(String name) { return true; }
@@ -52,6 +56,8 @@ public interface Profile {
             public boolean allowModule(String name) { return true; }
             public boolean allowLoad(String name) { return true; }
             public boolean allowRequire(String name) { return true; }
+            public boolean allowUnmarshalClass(String name) { return true; }
+            public boolean allowUnmarshalType(int type){ return true; }
         };
     Profile ANY = ALL;
     Profile DEFAULT = ALL;
@@ -61,4 +67,6 @@ public interface Profile {
     boolean allowModule(String name);
     boolean allowLoad(String name);
     boolean allowRequire(String name);
+    boolean allowUnmarshalClass(String name);
+    boolean allowUnmarshalType(int type);
 }// Profile

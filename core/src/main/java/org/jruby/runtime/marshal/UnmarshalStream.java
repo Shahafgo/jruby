@@ -224,7 +224,7 @@ public class UnmarshalStream extends InputStream {
 
     private IRubyObject unmarshalObjectDirectly(int type, MarshalState state, boolean callProc) throws IOException {
         IRubyObject rubyObj;
-        if (!acceptedTypes.isEmpty() && !acceptedTypes.contains(type)) {
+        if (!this.runtime.getInstanceConfig().getProfile().allowUnmarshalType(type)) {
             throw new UnsafeOperationException("Ruby type = " + type + " is rejected by the accepted unmarshal types configuration");
         }
         switch (type) {
@@ -457,9 +457,11 @@ public class UnmarshalStream extends InputStream {
     private IRubyObject defaultObjectUnmarshal() throws IOException {
         RubySymbol className = (RubySymbol) unmarshalObject(false);
 
-        RubyClass type = getClassFromPath(runtime, className.idString());
-
-        return (IRubyObject)type.unmarshal(this);
+        if (this.getRuntime().getInstanceConfig().getProfile().allowUnmarshalClass(className.toString())) {
+            RubyClass type = getClassFromPath(runtime, className.idString());
+            return (IRubyObject) type.unmarshal(this);
+        }
+        throw getRuntime().newArgumentError("Marshaled data is not allowed: " + className);
     }
 
     public void defaultVariablesUnmarshal(IRubyObject object) throws IOException {
@@ -553,7 +555,7 @@ public class UnmarshalStream extends InputStream {
 
         // Special case Encoding so they are singletons
         // See https://bugs.ruby-lang.org/issues/11760
-        if (this.acceptedClasses.isEmpty() || this.acceptedClasses.contains(classInstance.getName())) {
+        if (this.runtime.getInstanceConfig().getProfile().allowUnmarshalClass(className)) {
             if (classInstance == runtime.getEncoding()) {
                 unmarshaled = RubyEncoding.find(runtime.getCurrentContext(), classInstance, data);
             } else {
@@ -575,7 +577,7 @@ public class UnmarshalStream extends InputStream {
         IRubyObject result = classInstance.allocate();
         registerLinkTarget(result);
         IRubyObject marshaled = unmarshalObject();
-        if (this.acceptedClasses.isEmpty() || this.acceptedClasses.contains(classInstance.getName())) {
+        if (this.runtime.getInstanceConfig().getProfile().allowUnmarshalClass(className)) {
             return classInstance.smartLoadNewUser(result, marshaled);
         }
         throw getRuntime().newArgumentError("Marshaled data is not allowed: " + className);
